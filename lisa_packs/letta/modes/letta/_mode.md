@@ -7,6 +7,7 @@ require_query: true
 routable: true
 priority: 8
 routing_intent_tags: [letta, agent]
+satisfies_intents: [letta, agent]
 routing_intent_keywords:
   letta:
     - letta
