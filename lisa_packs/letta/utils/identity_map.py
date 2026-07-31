@@ -5,20 +5,23 @@ conversation_id)`` to a Letta ``agent_id`` (plus optional core block ids,
 source ids, and sync metadata) so the adapter server and operations can
 resolve the right Letta agent without re-creating one each turn.
 
-The map is persisted as a JSON sidecar under the owning process's data
-directory (``<data_dir>/letta/identity-map.json``). Reads tolerate a
-missing file as an empty map. Writes are atomic via a temp-file rename.
+The map is persisted as a JSON file inside the ``lisa-storage`` files
+sandbox (``<data_dir>/files/letta/identity-map.json``) via the
+:class:`sdk.storage.StorageBackend` — the same sandboxed I/O backend the
+``lisa-storage`` MCP server wraps. Direct pack-level filesystem writes
+are intentionally disallowed so all persistence ownership remains in the
+storage layer. Reads tolerate a missing file as an empty map.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+from sdk.storage import StorageBackend
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +29,8 @@ __all__ = ["IdentityEntry", "IdentityMap", "identity_key"]
 
 _IDENTITY_MAP_SUBDIR = "letta"
 _IDENTITY_MAP_FILE = "identity-map.json"
+#: Sandbox-relative path (forward slashes) to the identity-map file.
+_IDENTITY_MAP_REL = f"{_IDENTITY_MAP_SUBDIR}/{_IDENTITY_MAP_FILE}"
 
 
 def identity_key(
@@ -70,14 +75,24 @@ class IdentityMap:
 
     The map is deliberately a single JSON file under the owning data dir.
     It is NOT a kernel seam and holds no host runtime state.
+
+    All file I/O is routed through :class:`sdk.storage.StorageBackend`,
+    the sandboxed backend that ``lisa-storage`` wraps, so the pack never
+    touches the filesystem directly.
     """
 
     def __init__(self, data_dir: Path) -> None:
-        self._path = Path(data_dir) / _IDENTITY_MAP_SUBDIR / _IDENTITY_MAP_FILE
+        self._backend = StorageBackend(Path(data_dir))
 
     @property
     def path(self) -> Path:
-        return self._path
+        """The on-disk path of the identity-map file inside the storage sandbox.
+
+        Provided for diagnostics and tests; reads/writes should go through
+        :meth:`load` / :meth:`_write` (which route via the storage backend)
+        rather than touching this path directly.
+        """
+        return self._backend.files_root() / _IDENTITY_MAP_SUBDIR / _IDENTITY_MAP_FILE
 
     def load(self) -> dict[str, dict[str, Any]]:
         """Return the raw mapping ``{identity_key: entry_dict}``.
@@ -85,15 +100,28 @@ class IdentityMap:
         Tolerates a missing file (returns ``{}``) and a corrupt file
         (logs a warning, returns ``{}``).
         """
-        if not self._path.exists():
-            return {}
+        result = self._backend.read_file(_IDENTITY_MAP_REL, encoding="utf-8")
         try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("letta: identity map %s unreadable: %s", self._path, exc)
+            parsed = json.loads(result)
+        except (json.JSONDecodeError, TypeError) as exc:
+            # Corrupt / non-JSON content on disk.
+            logger.warning("letta: identity map unreadable: %s", exc)
             return {}
-        if not isinstance(raw, dict):
+        if not isinstance(parsed, dict):
             return {}
+        # The storage backend returns ``{"error": "<str>"}`` on failure
+        # (missing file, denied path, read error). A valid identity map
+        # has dict values, so an ``error`` key with a string value is an
+        # unambiguous backend error, not a user identity key.
+        err = parsed.get("error")
+        if isinstance(err, str):
+            if "not found" not in err:
+                logger.warning("letta: identity map read failed: %s", err)
+            return {}
+        return self._coerce(parsed)
+
+    @staticmethod
+    def _coerce(raw: dict[str, Any]) -> dict[str, dict[str, Any]]:
         return {
             str(k): (v if isinstance(v, dict) else {})
             for k, v in raw.items()
@@ -137,20 +165,18 @@ class IdentityMap:
         return out
 
     def _write(self, data: dict[str, dict[str, Any]]) -> None:
-        """Atomic write: temp file in the same dir, then ``os.replace``."""
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(
-            prefix=_IDENTITY_MAP_FILE + ".",
-            suffix=".tmp",
-            dir=str(self._path.parent),
-        )
+        """Persist the full mapping through the ``lisa-storage`` sandbox.
+
+        The storage backend creates parent directories and applies the
+        sandbox path policy. A JSON error object from the backend is
+        raised as :class:`OSError` so callers' broad-except handlers
+        still catch write failures.
+        """
+        payload = json.dumps(data, indent=2, sort_keys=True)
+        result = self._backend.write_file(_IDENTITY_MAP_REL, payload)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                fh.write(json.dumps(data, indent=2, sort_keys=True))
-            os.replace(tmp, self._path)
-        except Exception:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-            raise
+            decoded = json.loads(result)
+        except json.JSONDecodeError:
+            return  # non-JSON is unexpected but not actionable here
+        if isinstance(decoded, dict) and "error" in decoded:
+            raise OSError(decoded["error"])

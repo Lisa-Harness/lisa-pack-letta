@@ -16,6 +16,7 @@ routing_intent_keywords:
     - delegate
 command_pattern: '^(?:/)?(?:letta|ask-letta|agent)(?:[\s,:;]+(?P<query>.+))?$'
 entry_operation_ids: [letta_ensure_agent]
+required_capabilities: [tools]
 allowed_operation_ids:
   - letta_ensure_agent
   - letta_send_message
