@@ -6,13 +6,15 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any
 
-from pydantic import BaseModel, Field
-
-from kernel.models import OperationExecutionContext, OperationResult, ToolExecutionContext
+from kernel.models import (
+    OperationExecutionContext,
+    OperationResult,
+    ToolExecutionContext,
+)
 from lisa_packs.letta.utils.client import LettaClient, LettaError
 from lisa_packs.letta.utils.identity_map import IdentityMap, identity_key
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,7 @@ class Parameters(BaseModel):
 
 async def execute(ctx: OperationExecutionContext) -> OperationResult:
     """Pull Lisa memories via memory.search and push them into Letta archival memory."""
-    if not callable(ctx.execute_tool_fn):
+    if ctx.host is None:
         return OperationResult(output_text="⛔ Tool execution not injected.")
 
     identity = IdentityMap(Path(os.getenv("LISA_DATA_DIR", "")))
@@ -51,7 +53,7 @@ async def execute(ctx: OperationExecutionContext) -> OperationResult:
     # backend is the default — which may be Letta itself). The point of
     # sync is to ensure high-salience Lisa-distilled facts are present as
     # Letta archival passages even when the default backend is local.
-    tool_result = await ctx.execute_tool_fn(
+    tool_result = await ctx.host.execute_tool(
         "memory.search",
         ToolExecutionContext(
             tool_id="memory.search",

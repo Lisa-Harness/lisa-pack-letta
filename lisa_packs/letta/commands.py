@@ -29,6 +29,15 @@ __all__ = [
 ]
 
 
+def _build_host(runtime: HostRuntime) -> Any:
+    """Build a ``_CallableHost`` from the runtime's legacy callables."""
+    from kernel.seams.host_adapter import _CallableHost
+
+    return _CallableHost(
+        execute_tool_fn=getattr(runtime, "execute_tool_fn", None),
+    )
+
+
 def get_host_commands() -> list[HostCommandSpec]:
     """Register the Letta pack's operator slash commands.
 
@@ -157,7 +166,7 @@ async def handle_letta_sync(
         surface_id=str(getattr(runtime.config, "surface_id", "") or ""),
         mode_id="letta",
         query=stripped or "",
-        execute_tool_fn=getattr(runtime, "execute_tool_fn", None),
+        host=_build_host(runtime),
     )
     result = await execute_operation("letta_sync_memory", ctx)
     return result.output_text or "sync completed (no output)"
