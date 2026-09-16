@@ -9,11 +9,12 @@ registers it with the kernel so ``get_workflow_catalog()`` and
 
 from __future__ import annotations
 
+import os
 import sys
+import typing
 from pathlib import Path
 
 import pytest
-
 from kernel.ipsar_fsm import (
     get_workflow_catalog,
     register_content_mcp,
@@ -26,10 +27,19 @@ from kernel.operations.registry import (
 )
 from kernel.tools.mcp_client import MCPClientConfig
 
-_CORE_ROOT: Path = (Path(__file__).resolve().parents[3] / "sdk" / "packs" / "core").resolve()
-_MEMORY_ROOT: Path = (Path(__file__).resolve().parents[3] / "sdk" / "packs" / "memory").resolve()
-_SEARCH_ROOT: Path = (Path(__file__).resolve().parents[3] / "sdk" / "packs" / "search").resolve()
-_LETTA_ROOT: Path = (Path(__file__).resolve().parents[2]).resolve()
+# The framework repo checkout (this file lives at
+# <pack>/lisa_packs/letta/tests/conftest.py → parents[3] = <pack>), which
+# bundles core/memory/search under sdk/packs/<name>. Content roots must point
+# at each pack's *package* dir (the one containing modes//operations//tools/),
+# not the distribution checkout: resolve_content_roots scans `<root>/modes` at
+# exactly one level of depth, so lisa_packs/ (which only nests the letta
+# package) yields no mode roots — the pack's own tests then see only the
+# core 'default' mode and the letta/letta-agent routing assertions fail.
+_LISA_REPO: Path = (Path(__file__).resolve().parents[3] / "sdk" / "packs").resolve()
+_CORE_ROOT: Path = (_LISA_REPO / "core" / "src" / "sdk" / "packs" / "core").resolve()
+_MEMORY_ROOT: Path = (_LISA_REPO / "memory" / "src" / "sdk" / "packs" / "memory").resolve()
+_SEARCH_ROOT: Path = (_LISA_REPO / "search" / "src" / "sdk" / "packs" / "search").resolve()
+_LETTA_ROOT: Path = (Path(__file__).resolve().parents[1]).resolve()
 
 
 def _make_catalog_mcp_config() -> MCPClientConfig:
@@ -44,14 +54,19 @@ def _make_catalog_mcp_config() -> MCPClientConfig:
             str(_CORE_ROOT),
         ],
         env={
-            "SDK_CONTENT_ROOTS": f"{_CORE_ROOT};{_MEMORY_ROOT};{_SEARCH_ROOT};{_LETTA_ROOT}",
+            # The catalog child splits SDK_CONTENT_ROOTS on os.pathsep (':'
+            # on POSIX); a literal ';' makes the whole string one bogus path
+            # that gets skipped, leaving only entry-point-discovered packs.
+            "SDK_CONTENT_ROOTS": os.pathsep.join(
+                str(root) for root in (_CORE_ROOT, _MEMORY_ROOT, _SEARCH_ROOT, _LETTA_ROOT)
+            ),
             "LISA_SESSION_PROVIDER_SELECTIONS": '{"modes":{"default":"lisa-pack-core"}}',
         },
     )
 
 
 @pytest.fixture(scope="module", autouse=True)
-def _mcp_catalog_setup() -> None:
+def _mcp_catalog_setup() -> typing.Iterator[None]:
     """Wire the catalog MCP and operation callbacks so the kernel can load catalogs.
 
     Order matters: operation MCP first, then operation callbacks, then content MCP.
@@ -67,3 +82,21 @@ def _mcp_catalog_setup() -> None:
     register_content_mcp(config)
     # Eagerly load the workflow catalog now (sync context, before any async test runs)
     get_workflow_catalog()
+    # The turn runner's routing vocabulary must be wired at "boot" time; the
+    # kernel raises at first use otherwise. Mirror the minimal representative
+    # vocabulary from kernel/tests/conftest.py.
+    from kernel.routing_vocabulary import (
+        register_routing_vocabulary,
+        reset_routing_vocabulary,
+    )
+
+    reset_routing_vocabulary()
+    register_routing_vocabulary(
+        sequential_connectors=["then", "and then", "after that", "next", "followed by"],
+        producer_intents=["research", "gather", "learn", "read", "analyze", "review", "architect"],
+        consumer_intents=["code", "write", "implement", "review"],
+        resume_phrases=["proceed", "continue", "go ahead", "go for it", "do it", "carry on", "pick up", "resume", "next step", "keep going"],
+        topic_abandonment_markers=["side quest", "rewind", "never mind", "forget", "different topic", "not about"],
+    )
+    yield
+    reset_routing_vocabulary()

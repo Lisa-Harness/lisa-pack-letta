@@ -13,10 +13,9 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from kernel.models import OperationExecutionContext, OperationResult
-from kernel.turn_runner import TurnHooks, run_turn
-
+from kernel.turn_hooks import ModelHooks, TurnHooks
+from kernel.turn_runner import run_turn
 
 # ── Mode declaration ─────────────────────────────────────────────────
 
@@ -109,7 +108,7 @@ def _stub_operation_callback() -> tuple[list[str], Any]:
     dispatches to the caller-supplied mapping. Restores the original callback
     after the test.
     """
-    import kernel.ipsar_fsm as ipsar_fsm
+    from kernel import ipsar_fsm
 
     original = ipsar_fsm._execute_operation_fn
     executed: list[str] = []
@@ -154,7 +153,8 @@ async def test_letta_agent_turn_runs_entry_ops_without_model_call(
         complete_calls.append(kwargs)
         raise AssertionError("complete() must not be called in letta-agent action mode")
 
-    hooks = TurnHooks(complete=complete_should_not_fire)
+    # A letta-agent action turn must never reach the model hook.
+    hooks = TurnHooks(models=ModelHooks(complete=complete_should_not_fire))
 
     result = await run_turn(mode_id="letta-agent", query="hello agent", hooks=hooks)
 
@@ -193,7 +193,7 @@ async def test_letta_agent_turn_without_mapped_agent_returns_error_text(
         complete_calls.append(kwargs)
         raise AssertionError("complete() must not be called in letta-agent action mode")
 
-    hooks = TurnHooks(complete=complete_should_not_fire)
+    hooks = TurnHooks(models=ModelHooks(complete=complete_should_not_fire))
 
     result = await run_turn(mode_id="letta-agent", query="hello", hooks=hooks)
 

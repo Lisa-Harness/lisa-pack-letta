@@ -25,7 +25,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+# mcp 2.x renamed FastMCP to MCPServer (mcp.server.mcpserver); the
+# decorator and stdio run APIs are otherwise compatible.
+from mcp.server.mcpserver import MCPServer
 
 from lisa_packs.letta.utils.client import LettaClient, LettaError
 from lisa_packs.letta.utils.identity_map import IdentityEntry, IdentityMap, identity_key
@@ -34,7 +36,7 @@ __all__ = ["init_server", "main", "mcp"]
 
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("Lisa Letta Memory Server")
+mcp = MCPServer("Lisa Letta Memory Server")
 
 _client: LettaClient | None = None
 _identity: IdentityMap | None = None
