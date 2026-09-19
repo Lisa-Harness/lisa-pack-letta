@@ -8,13 +8,10 @@ routable: true
 priority: 9
 routing_intent_tags: [letta, agent, delegate]
 satisfies_intents: [letta, agent, delegate]
-fast_path_patterns:
-  - '\bletta[- ]agent\b'
-  - '\bask-letta-agent\b'
 routing_intent_keywords:
   letta:
     - letta-agent
-    - ask-letta-agent
+    - letta agent
     - delegate to letta
 command_pattern: '^(?:/)?(?:letta-agent|ask-letta-agent|agent)(?:[\s,:;]+(?P<query>.+))?$'
 entry_operation_ids: [letta_ensure_agent, letta_send_message]

@@ -8,14 +8,10 @@ routable: true
 priority: 8
 routing_intent_tags: [letta, agent]
 satisfies_intents: [letta, agent]
-fast_path_patterns:
-  - '\bletta\b'
-  - '\bmemgpt\b'
 routing_intent_keywords:
   letta:
     - letta
     - memgpt
-    - letta agent
     - ask letta
 command_pattern: '^(?:/)?(?:letta|ask-letta|agent)(?:[\s,:;]+(?P<query>.+))?$'
 entry_operation_ids: [letta_ensure_agent]
