@@ -6,6 +6,9 @@ mode_kind: chat
 require_query: true
 routable: true
 priority: 8
+fast_path_patterns:
+  - "\\bletta\\b"
+  - "\\bmemgpt\\b"
 routing_intent_tags: [letta, agent]
 satisfies_intents: [letta, agent]
 routing_intent_keywords:

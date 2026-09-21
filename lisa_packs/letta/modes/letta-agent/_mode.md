@@ -6,6 +6,9 @@ mode_kind: action
 require_query: true
 routable: true
 priority: 9
+fast_path_patterns:
+  - "\\bletta.?agent\\b"
+  - "\\bdelegate to letta\\b"
 routing_intent_tags: [letta, agent, delegate]
 satisfies_intents: [letta, agent, delegate]
 routing_intent_keywords:
