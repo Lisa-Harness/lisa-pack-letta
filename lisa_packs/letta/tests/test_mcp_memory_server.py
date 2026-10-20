@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import httpx
@@ -20,12 +19,14 @@ def _mock_transport(routes: list[tuple[str, str, httpx.Response]]) -> httpx.Mock
     two calls (create agent + create passage) whose URLs both contain
     ``/v1/agents`` but differ by method and tail path.
     """
+
     def handler(req: httpx.Request) -> httpx.Response:
         url = str(req.url)
         for method, needle, resp in routes:
             if req.method == method and needle in url:
                 return resp
         return httpx.Response(404, text=f"no mock for {req.method} {url}")
+
     return httpx.MockTransport(handler)
 
 
@@ -44,10 +45,20 @@ async def test_add_memory_creates_agent_then_passage(tmp_path: Path) -> None:
     # Order matters: the archival-memory route must come before /v1/agents
     # because the archival URL (http://letta.local/v1/agents/agent-1/archival-memory)
     # contains "/v1/agents" as a substring.
-    transport = _mock_transport([
-        ("POST", "/archival-memory", httpx.Response(200, json={"id": "pass-1", "text": "durable fact"})),
-        ("POST", "/v1/agents", httpx.Response(200, json={"id": "agent-1", "name": "lisa-agent"})),
-    ])
+    transport = _mock_transport(
+        [
+            (
+                "POST",
+                "/archival-memory",
+                httpx.Response(200, json={"id": "pass-1", "text": "durable fact"}),
+            ),
+            (
+                "POST",
+                "/v1/agents",
+                httpx.Response(200, json={"id": "agent-1", "name": "lisa-agent"}),
+            ),
+        ]
+    )
     _init(tmp_path, transport)
     out = await server_mod.add_memory(user_slug="u", content="durable fact")
     data = json.loads(out)
@@ -58,10 +69,16 @@ async def test_add_memory_creates_agent_then_passage(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_add_memory_reuses_mapped_agent(tmp_path: Path) -> None:
     # First call to seed the identity map
-    transport = _mock_transport([
-        ("POST", "/archival-memory", httpx.Response(200, json={"id": "pass-1", "text": "f"})),
-        ("POST", "/v1/agents", httpx.Response(200, json={"id": "agent-1", "name": "lisa-agent"})),
-    ])
+    transport = _mock_transport(
+        [
+            ("POST", "/archival-memory", httpx.Response(200, json={"id": "pass-1", "text": "f"})),
+            (
+                "POST",
+                "/v1/agents",
+                httpx.Response(200, json={"id": "agent-1", "name": "lisa-agent"}),
+            ),
+        ]
+    )
     _init(tmp_path, transport)
     await server_mod.add_memory(user_slug="u", content="first")
     # Second call: no agent creation should happen (only archival posts)
@@ -74,8 +91,11 @@ async def test_add_memory_reuses_mapped_agent(tmp_path: Path) -> None:
         return httpx.Response(200, json={"id": "agent-1"})
 
     server_mod.init_server(
-        tmp_path, base_url="http://letta.local", api_key="k",
-        default_agent_name="lisa-agent", transport=httpx.MockTransport(handler),
+        tmp_path,
+        base_url="http://letta.local",
+        api_key="k",
+        default_agent_name="lisa-agent",
+        transport=httpx.MockTransport(handler),
     )
     out = await server_mod.add_memory(user_slug="u", content="second")
     data = json.loads(out)
@@ -87,10 +107,20 @@ async def test_add_memory_reuses_mapped_agent(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_search_memory_returns_passages(tmp_path: Path) -> None:
-    transport = _mock_transport([
-        ("GET", "/archival-memory/search", httpx.Response(200, json=[{"id": "p1", "text": "found"}])),
-        ("POST", "/v1/agents", httpx.Response(200, json={"id": "agent-1", "name": "lisa-agent"})),
-    ])
+    transport = _mock_transport(
+        [
+            (
+                "GET",
+                "/archival-memory/search",
+                httpx.Response(200, json=[{"id": "p1", "text": "found"}]),
+            ),
+            (
+                "POST",
+                "/v1/agents",
+                httpx.Response(200, json={"id": "agent-1", "name": "lisa-agent"}),
+            ),
+        ]
+    )
     _init(tmp_path, transport)
     out = await server_mod.search_memory(query="test", user_slug="u")
     data = json.loads(out)
@@ -100,10 +130,16 @@ async def test_search_memory_returns_passages(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_list_memories_returns_passages(tmp_path: Path) -> None:
-    transport = _mock_transport([
-        ("GET", "/archival-memory", httpx.Response(200, json=[{"id": "p1", "text": "recent"}])),
-        ("POST", "/v1/agents", httpx.Response(200, json={"id": "agent-1", "name": "lisa-agent"})),
-    ])
+    transport = _mock_transport(
+        [
+            ("GET", "/archival-memory", httpx.Response(200, json=[{"id": "p1", "text": "recent"}])),
+            (
+                "POST",
+                "/v1/agents",
+                httpx.Response(200, json={"id": "agent-1", "name": "lisa-agent"}),
+            ),
+        ]
+    )
     _init(tmp_path, transport)
     out = await server_mod.list_memories(user_slug="u")
     data = json.loads(out)
@@ -123,7 +159,7 @@ async def test_add_memory_surfaces_error_envelope(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_not_initialized_raises(tmp_path: Path) -> None:
     # Reset module state
-    server_mod._client = None
-    server_mod._identity = None
+    server_mod._state.client = None
+    server_mod._state.identity = None
     with pytest.raises(RuntimeError, match="not initialized"):
         await server_mod.add_memory(user_slug="u", content="x")

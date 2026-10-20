@@ -25,7 +25,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["normalize_add", "normalize_search", "normalize_list"]
+__all__ = ["normalize_add", "normalize_list", "normalize_search"]
 
 
 def _now_iso() -> str:

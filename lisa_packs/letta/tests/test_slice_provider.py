@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from kernel.slice import SliceMode, SlicePolicy
 
 from lisa_packs.letta.slice_provider import LettaSyncSlice, get_slice_provider_factory
 
@@ -36,8 +37,8 @@ class _FakeHooks:
         return SimpleNamespace(output_text="ok")
 
 
-def _policy(budget_ms: int) -> object:
-    return SimpleNamespace(budget_ms=budget_ms)
+def _policy(budget_ms: int) -> SlicePolicy:
+    return SlicePolicy(mode=SliceMode.POST_TURN, budget_ms=budget_ms)
 
 
 @pytest.mark.asyncio
@@ -127,6 +128,7 @@ async def test_slice_noops_without_snapshot(tmp_path: Path) -> None:
 
 def test_factory_returns_provider() -> None:
     from types import SimpleNamespace
+
     provider = get_slice_provider_factory(SimpleNamespace(), SimpleNamespace())
     assert isinstance(provider, LettaSyncSlice)
 
@@ -135,9 +137,11 @@ def test_factory_returns_provider() -> None:
 async def test_slice_swallows_operation_error(tmp_path: Path) -> None:
     os.environ["LETTA_SYNC_ENABLED"] = "1"
     try:
+
         class _ErrHooks(_FakeHooks):
             async def execute_operation(self, op_id: str, params: object) -> object:
                 raise RuntimeError("boom")
+
         hooks = _ErrHooks(utilization=0.9, budget_ms=1000)
         slc = LettaSyncSlice(turn_hooks=hooks, thread_dir=tmp_path)
         slc._state.last_compact_turn = -100

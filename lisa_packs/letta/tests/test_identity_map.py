@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from lisa_packs.letta.utils.identity_map import IdentityEntry, IdentityMap, identity_key
+
+_EXPECTED_SYNC_TURN = 5
+_EXPECTED_ENTRY_COUNT = 2
 
 
 def test_identity_key_is_stable(tmp_path: Path) -> None:
@@ -40,14 +41,14 @@ def test_upsert_and_get_roundtrip(tmp_path: Path) -> None:
 def test_update_patches_fields(tmp_path: Path) -> None:
     imap = IdentityMap(tmp_path)
     imap.upsert("k", IdentityEntry(agent_id="a1"))
-    updated = imap.update("k", last_sync_turn=5, last_sync_at="2026-07-18")
+    updated = imap.update("k", last_sync_turn=_EXPECTED_SYNC_TURN, last_sync_at="2026-07-18")
     assert updated is not None
-    assert updated.last_sync_turn == 5
+    assert updated.last_sync_turn == _EXPECTED_SYNC_TURN
     assert updated.last_sync_at == "2026-07-18"
     # Persisted
     reloaded = imap.get("k")
     assert reloaded is not None
-    assert reloaded.last_sync_turn == 5
+    assert reloaded.last_sync_turn == _EXPECTED_SYNC_TURN
 
 
 def test_update_returns_none_for_missing_key(tmp_path: Path) -> None:
@@ -60,7 +61,7 @@ def test_all_entries_parses_all(tmp_path: Path) -> None:
     imap.upsert("k1", IdentityEntry(agent_id="a1"))
     imap.upsert("k2", IdentityEntry(agent_id="a2"))
     entries = imap.all_entries()
-    assert len(entries) == 2
+    assert len(entries) == _EXPECTED_ENTRY_COUNT
     assert {e.agent_id for e in entries.values()} == {"a1", "a2"}
 
 

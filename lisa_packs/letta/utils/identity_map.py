@@ -122,10 +122,7 @@ class IdentityMap:
 
     @staticmethod
     def _coerce(raw: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        return {
-            str(k): (v if isinstance(v, dict) else {})
-            for k, v in raw.items()
-        }
+        return {str(k): (v if isinstance(v, dict) else {}) for k, v in raw.items()}
 
     def get(self, key: str) -> IdentityEntry | None:
         """Return one entry by composite key, or ``None``."""

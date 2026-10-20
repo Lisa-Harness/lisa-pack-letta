@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
 import httpx
+import pytest
 
 from lisa_packs.letta.utils.client import LettaClient, LettaError
+
+_EXPECTED_MESSAGES_BEFORE = 10
 
 
 def _client(transport: httpx.MockTransport, *, api_key: str = "test-key") -> LettaClient:
@@ -36,7 +38,9 @@ async def test_send_message_posts_messages() -> None:
 
     def handler(req: httpx.Request) -> httpx.Response:
         captured["json"] = req.read().decode()
-        return httpx.Response(200, json={"messages": [{"message_type": "assistant_message", "content": "hi"}]})
+        return httpx.Response(
+            200, json={"messages": [{"message_type": "assistant_message", "content": "hi"}]}
+        )
 
     transport = httpx.MockTransport(handler)
     async with _client(transport) as client:
@@ -82,7 +86,7 @@ async def test_summarize_posts_to_summarize_endpoint() -> None:
     transport = httpx.MockTransport(handler)
     async with _client(transport) as client:
         result = await client.summarize("agent-1")
-    assert result["num_messages_before"] == 10
+    assert result["num_messages_before"] == _EXPECTED_MESSAGES_BEFORE
     assert "summarize" in str(captured["url"])
 
 

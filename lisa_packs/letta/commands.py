@@ -4,6 +4,11 @@ Operator-facing commands for inspecting and driving the Letta
 integration. These handlers live in the pack and are discovered through
 the ``lisa.extensions.host_commands`` entry-point group. They delegate
 to the Letta operations or read the identity-map sidecar.
+
+The host runtime is typed as ``Any`` here, matching the kernel's
+``HostCommandHandler`` protocol: the kernel stays free of host-layer
+imports, and the pack only reaches the runtime's ``data_dir``,
+``config``, and legacy callables at runtime.
 """
 
 from __future__ import annotations
@@ -11,25 +16,22 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from kernel.host_commands import HostCommandSpec
-
-if TYPE_CHECKING:
-    from hosts.core.runtime import HostRuntime
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "get_host_commands",
-    "handle_letta_status",
     "handle_letta_agent",
-    "handle_letta_sync",
     "handle_letta_compact",
+    "handle_letta_status",
+    "handle_letta_sync",
 ]
 
 
-def _build_host(runtime: HostRuntime) -> Any:
+def _build_host(runtime: Any) -> Any:
     """Build a ``_CallableHost`` from the runtime's legacy callables."""
     from kernel.seams.host_adapter import _CallableHost
 
@@ -78,7 +80,7 @@ def get_host_commands() -> list[HostCommandSpec]:
     ]
 
 
-def _identity_map(runtime: HostRuntime) -> Any:
+def _identity_map(runtime: Any) -> Any:
     from lisa_packs.letta.utils.identity_map import IdentityMap
 
     return IdentityMap(Path(runtime.data_dir))
@@ -89,7 +91,7 @@ def _status_line(label: str, value: Any) -> str:
 
 
 async def handle_letta_status(
-    runtime: HostRuntime,
+    runtime: Any,
     stripped: str,
     message: str,
 ) -> str:
@@ -116,7 +118,7 @@ async def handle_letta_status(
 
 
 async def handle_letta_agent(
-    runtime: HostRuntime,
+    runtime: Any,
     stripped: str,
     message: str,
 ) -> str:
@@ -131,7 +133,10 @@ async def handle_letta_agent(
     )
     entry = identity.get(key)
     if entry is None:
-        return f"No Letta agent mapped for identity `{key}`. Run `/letta sync` or `/letta <query>` in letta mode to create one."
+        return (
+            f"No Letta agent mapped for identity `{key}`. "
+            "Run `/letta sync` or `/letta <query>` in letta mode to create one."
+        )
     lines = [
         "## Letta Agent",
         "",
@@ -152,7 +157,7 @@ async def handle_letta_agent(
 
 
 async def handle_letta_sync(
-    runtime: HostRuntime,
+    runtime: Any,
     stripped: str,
     message: str,
 ) -> str:
@@ -173,7 +178,7 @@ async def handle_letta_sync(
 
 
 async def handle_letta_compact(
-    runtime: HostRuntime,
+    runtime: Any,
     stripped: str,
     message: str,
 ) -> str:

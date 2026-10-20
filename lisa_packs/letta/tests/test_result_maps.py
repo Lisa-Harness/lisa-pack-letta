@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from lisa_packs.letta.utils.result_maps import normalize_add, normalize_list, normalize_search
+
+_EXPECTED_PASSAGE_COUNT = 2
 
 
 def test_normalize_add_projects_passage_to_record() -> None:
@@ -34,7 +34,7 @@ def test_normalize_search_returns_bare_array() -> None:
     raw = json.dumps([{"id": "p1", "text": "a"}, {"id": "p2", "text": "b"}])
     out = json.loads(normalize_search(raw))
     assert isinstance(out, list)
-    assert len(out) == 2
+    assert len(out) == _EXPECTED_PASSAGE_COUNT
     assert out[0]["content"] == "a"
     assert out[1]["id"] == "p2"
 

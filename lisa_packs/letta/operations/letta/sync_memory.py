@@ -22,9 +22,55 @@ logger = logging.getLogger(__name__)
 class Parameters(BaseModel):
     query: str = Field(
         default="",
-        description="Optional query to select which Lisa memories to sync. Empty syncs recent memories.",
+        description=(
+            "Optional query to select which Lisa memories to sync. Empty syncs recent memories."
+        ),
     )
     limit: int = Field(default=10, ge=1, le=50, description="Max memories to sync.")
+
+
+def _parse_records(raw_output: str | None) -> list[object]:
+    """Parse the ``memory.search`` payload into a list of candidate records."""
+    try:
+        records = json.loads(raw_output or "[]")
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if isinstance(records, dict) and "results" in records:
+        records = records["results"]
+    if not isinstance(records, list):
+        return []
+    return records
+
+
+async def _push_records(
+    client: LettaClient,
+    agent_id: str,
+    records: list[object],
+    limit: int,
+) -> tuple[int, list[str]]:
+    """Write each non-empty record to Letta archival memory.
+
+    Returns the number of synced passages and the failures collected
+    along the way. A non-Letta transport error stops the loop: the
+    connection is gone, so continuing would repeat the same failure.
+    """
+    synced = 0
+    failures: list[str] = []
+    for record in records[:limit]:
+        if not isinstance(record, dict):
+            continue
+        content = str(record.get("content") or "")
+        if not content:
+            continue
+        try:
+            await client.create_passage(agent_id, text=content)
+            synced += 1
+        except LettaError as exc:
+            failures.append(str(exc))
+        except Exception as exc:  # pylint: disable=broad-except
+            failures.append(f"{type(exc).__name__}: {exc}")
+            break
+    return synced, failures
 
 
 async def execute(ctx: OperationExecutionContext) -> OperationResult:
@@ -70,36 +116,15 @@ async def execute(ctx: OperationExecutionContext) -> OperationResult:
     if getattr(tool_result, "error", None):
         return OperationResult(output_text=f"⛔ memory.search failed: {tool_result.error}")
 
-    try:
-        records = json.loads(tool_result.output_text or "[]")
-    except (json.JSONDecodeError, TypeError):
-        records = []
-    if isinstance(records, dict) and "results" in records:
-        records = records["results"]
-    if not isinstance(records, list):
-        records = []
+    records = _parse_records(getattr(tool_result, "output_text", None))
 
     base_url = os.getenv("LETTA_BASE_URL", "http://localhost:8283")
     api_key = os.getenv("LETTA_API_KEY", "")
-    synced = 0
-    failures: list[str] = []
     async with LettaClient(base_url=base_url, api_key=api_key) as client:
-        for record in records[:limit]:
-            if not isinstance(record, dict):
-                continue
-            content = str(record.get("content") or "")
-            if not content:
-                continue
-            try:
-                await client.create_passage(entry.agent_id, text=content)
-                synced += 1
-            except LettaError as exc:
-                failures.append(str(exc))
-            except Exception as exc:  # pylint: disable=broad-except
-                failures.append(f"{type(exc).__name__}: {exc}")
-                break
+        synced, failures = await _push_records(client, entry.agent_id, records, limit)
 
     from datetime import UTC, datetime
+
     current = identity.get(key)
     identity.update(
         key,

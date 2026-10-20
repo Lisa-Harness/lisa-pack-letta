@@ -7,11 +7,10 @@ import logging
 import os
 from pathlib import Path
 
-from pydantic import BaseModel, Field
-
 from kernel.models import OperationExecutionContext, OperationResult
 from lisa_packs.letta.utils.client import LettaClient, LettaError
 from lisa_packs.letta.utils.identity_map import IdentityMap, identity_key
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,9 @@ class Parameters(BaseModel):
     )
     agent_id: str = Field(
         default="",
-        description="Optional explicit Letta agent id. Defaults to the mapped agent for this identity.",
+        description=(
+            "Optional explicit Letta agent id. Defaults to the mapped agent for this identity."
+        ),
     )
 
 
@@ -72,7 +73,11 @@ async def execute(ctx: OperationExecutionContext) -> OperationResult:
         except Exception as exc:  # pylint: disable=broad-except
             return OperationResult(
                 output_text=f"⛔ Letta is not reachable at {base_url}: {type(exc).__name__}: {exc}",
-                output_json={"error": str(exc), "error_type": type(exc).__name__, "base_url": base_url},
+                output_json={
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "base_url": base_url,
+                },
             )
 
     messages = response.get("messages") if isinstance(response, dict) else None

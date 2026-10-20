@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -38,9 +39,22 @@ logger = logging.getLogger(__name__)
 
 mcp = MCPServer("Lisa Letta Memory Server")
 
-_client: LettaClient | None = None
-_identity: IdentityMap | None = None
-_default_agent_name: str = "lisa-agent"
+
+@dataclass
+class _ServerState:
+    """Process-wide state for the Letta memory MCP server.
+
+    Bundled into one object so :func:`init_server` mutates a single
+    global instead of three, and so the tools read one consistent
+    snapshot.
+    """
+
+    client: LettaClient | None = None
+    identity: IdentityMap | None = None
+    default_agent_name: str = "lisa-agent"
+
+
+_state = _ServerState()
 
 
 def init_server(
@@ -65,13 +79,10 @@ def init_server(
             directly. Useful for Letta Cloud when you've already created
             an agent on the website and want to reuse it.
     """
-    global _client, _identity, _default_agent_name
-    _identity = IdentityMap(data_dir)
-    resolved_name = default_agent_name or os.getenv(
-        "LETTA_DEFAULT_AGENT_NAME", "lisa-agent"
-    )
-    _default_agent_name = str(resolved_name)
-    _client = LettaClient(
+    _state.identity = IdentityMap(data_dir)
+    resolved_name = default_agent_name or os.getenv("LETTA_DEFAULT_AGENT_NAME", "lisa-agent")
+    _state.default_agent_name = str(resolved_name)
+    _state.client = LettaClient(
         base_url=str(base_url or os.getenv("LETTA_BASE_URL", "http://localhost:8283")),
         api_key=api_key if api_key is not None else os.getenv("LETTA_API_KEY", ""),
         transport=transport,
@@ -79,12 +90,12 @@ def init_server(
 
 
 def _require() -> tuple[LettaClient, IdentityMap]:
-    if _client is None or _identity is None:
+    if _state.client is None or _state.identity is None:
         raise RuntimeError(
             "lisa-letta-memory is not initialized. "
             "Call init_server(data_dir) from main() before serving tools."
         )
-    return _client, _identity
+    return _state.client, _state.identity
 
 
 async def _resolve_agent(
@@ -117,7 +128,7 @@ async def _resolve_agent(
     if explicit_agent_id:
         identity.upsert(
             key,
-            IdentityEntry(agent_id=explicit_agent_id, agent_name=_default_agent_name),
+            IdentityEntry(agent_id=explicit_agent_id, agent_name=_state.default_agent_name),
         )
         return explicit_agent_id
 
@@ -127,19 +138,19 @@ async def _resolve_agent(
 
     # Look up an existing agent by name before creating — Letta Cloud's
     # free plan allows only 3 agents, and creating a duplicate may 402.
-    existing = await client.find_agent_by_name(_default_agent_name)
+    existing = await client.find_agent_by_name(_state.default_agent_name)
     if existing is not None and existing.get("id"):
         agent_id = str(existing["id"])
         identity.upsert(
             key,
             IdentityEntry(
                 agent_id=agent_id,
-                agent_name=str(existing.get("name") or _default_agent_name),
+                agent_name=str(existing.get("name") or _state.default_agent_name),
             ),
         )
         return agent_id
 
-    agent = await client.create_agent(name=_default_agent_name)
+    agent = await client.create_agent(name=_state.default_agent_name)
     agent_id = str(agent.get("id") or "")
     if not agent_id:
         raise LettaError("Letta create_agent returned no agent id")
@@ -147,7 +158,7 @@ async def _resolve_agent(
         key,
         IdentityEntry(
             agent_id=agent_id,
-            agent_name=str(agent.get("name") or _default_agent_name),
+            agent_name=str(agent.get("name") or _state.default_agent_name),
         ),
     )
     return agent_id
@@ -160,6 +171,7 @@ async def add_memory(
     memory_scope: str = "personal",
     workspace_id: str = "default",
     surface_id: str = "",
+    *,
     memory_tier: str = "long_term",
     operation_id: str = "letta.add",
     instruction_id: str = "letta.v1",

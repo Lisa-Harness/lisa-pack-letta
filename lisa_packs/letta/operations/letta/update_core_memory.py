@@ -5,13 +5,11 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any
-
-from pydantic import BaseModel, Field
 
 from kernel.models import OperationExecutionContext, OperationResult
 from lisa_packs.letta.utils.client import LettaClient, LettaError
 from lisa_packs.letta.utils.identity_map import IdentityMap, identity_key
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +17,15 @@ logger = logging.getLogger(__name__)
 class Parameters(BaseModel):
     block_id: str = Field(
         default="",
-        description="Letta block id to update. If empty, the operation looks up a mapped block by label.",
+        description=(
+            "Letta block id to update. If empty, the operation looks up a mapped block by label."
+        ),
     )
     block_label: str = Field(
         default="",
-        description="Label of the block to update (e.g. 'human', 'persona'). Used when block_id is empty.",
+        description=(
+            "Label of the block to update (e.g. 'human', 'persona'). Used when block_id is empty."
+        ),
     )
     value: str = Field(..., description="New block value.")
 
@@ -73,7 +75,11 @@ async def execute(ctx: OperationExecutionContext) -> OperationResult:
         except Exception as exc:  # pylint: disable=broad-except
             return OperationResult(
                 output_text=f"⛔ Letta is not reachable at {base_url}: {type(exc).__name__}: {exc}",
-                output_json={"error": str(exc), "error_type": type(exc).__name__, "base_url": base_url},
+                output_json={
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "base_url": base_url,
+                },
             )
 
     return OperationResult(

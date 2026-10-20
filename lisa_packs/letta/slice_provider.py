@@ -34,7 +34,6 @@ from pathlib import Path
 from typing import Any
 
 from kernel.slice import SliceOutcome, SlicePolicy
-from kernel.slice_provider_discovery import SliceProviderFactory
 
 logger = logging.getLogger(__name__)
 

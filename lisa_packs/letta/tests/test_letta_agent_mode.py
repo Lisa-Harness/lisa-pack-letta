@@ -10,6 +10,7 @@ execution path.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -100,7 +101,7 @@ def test_parse_route_letta_agent_no_query_returns_empty_query() -> None:
 
 
 @pytest.fixture()
-def _stub_operation_callback() -> tuple[list[str], Any]:
+def _stub_operation_callback() -> Iterator[tuple[list[str], Any]]:
     """Monkeypatch kernel.ipsar_fsm._execute_operation_fn for one test.
 
     Returns (executed_list, register_fn) where register_fn installs a stub
@@ -136,16 +137,18 @@ async def test_letta_agent_turn_runs_entry_ops_without_model_call(
     output_text WITHOUT calling hooks.complete (no Lisa model round-trip).
     """
     executed, install = _stub_operation_callback
-    install({
-        "letta_ensure_agent": OperationResult(
-            output_text="Letta agent resolved: agent-123",
-            output_json={"agent_id": "agent-123", "created": False},
-        ),
-        "letta_send_message": OperationResult(
-            output_text="Hello from the Letta agent.",
-            output_json={"agent_id": "agent-123", "stop_reason": "stop"},
-        ),
-    })
+    install(
+        {
+            "letta_ensure_agent": OperationResult(
+                output_text="Letta agent resolved: agent-123",
+                output_json={"agent_id": "agent-123", "created": False},
+            ),
+            "letta_send_message": OperationResult(
+                output_text="Hello from the Letta agent.",
+                output_json={"agent_id": "agent-123", "stop_reason": "stop"},
+            ),
+        }
+    )
 
     complete_calls: list[dict[str, Any]] = []
 
@@ -176,16 +179,18 @@ async def test_letta_agent_turn_without_mapped_agent_returns_error_text(
     """If ensure_agent reports no mapped agent, send_message's error text
     still reaches the user via the joined output_text — no model call."""
     _executed, install = _stub_operation_callback
-    install({
-        "letta_ensure_agent": OperationResult(
-            output_text="⛔ Letta is not reachable at http://localhost:8283",
-            output_json={"error": "connection_refused"},
-        ),
-        "letta_send_message": OperationResult(
-            output_text="⛔ No Letta agent mapped for this identity.",
-            output_json={"error": "no_mapped_agent"},
-        ),
-    })
+    install(
+        {
+            "letta_ensure_agent": OperationResult(
+                output_text="⛔ Letta is not reachable at http://localhost:8283",
+                output_json={"error": "connection_refused"},
+            ),
+            "letta_send_message": OperationResult(
+                output_text="⛔ No Letta agent mapped for this identity.",
+                output_json={"error": "no_mapped_agent"},
+            ),
+        }
+    )
 
     complete_calls: list[dict[str, Any]] = []
 

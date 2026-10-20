@@ -19,7 +19,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["LettaClient", "LettaError", "LettaAgent", "LettaPassage"]
+__all__ = ["LettaAgent", "LettaClient", "LettaError", "LettaPassage"]
+
+#: HTTP status for a successful response with no body.
+_HTTP_NO_CONTENT = 204
 
 
 class LettaError(RuntimeError):
@@ -202,9 +205,7 @@ class LettaClient:
     @staticmethod
     def _unwrap(path: str, resp: httpx.Response) -> Any:
         if resp.is_success:
-            if resp.status_code == 204 or not resp.content:
+            if resp.status_code == _HTTP_NO_CONTENT or not resp.content:
                 return None
             return resp.json()
-        raise LettaError(
-            f"Letta {path} failed: HTTP {resp.status_code}: {resp.text[:200]}"
-        )
+        raise LettaError(f"Letta {path} failed: HTTP {resp.status_code}: {resp.text[:200]}")

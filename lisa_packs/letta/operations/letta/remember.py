@@ -12,11 +12,10 @@ import logging
 import os
 from pathlib import Path
 
-from pydantic import BaseModel, Field
-
 from kernel.models import OperationExecutionContext, OperationResult
 from lisa_packs.letta.utils.client import LettaClient, LettaError
 from lisa_packs.letta.utils.identity_map import IdentityMap, identity_key
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,10 @@ async def execute(ctx: OperationExecutionContext) -> OperationResult:
     entry = identity.get(key)
     if entry is None or not entry.agent_id:
         return OperationResult(
-            output_text="⛔ No Letta agent mapped for this identity. Run `/letta sync` or a letta-mode turn to create one.",
+            output_text=(
+                "⛔ No Letta agent mapped for this identity. "
+                "Run `/letta sync` or a letta-mode turn to create one."
+            ),
             output_json={"error": "no_mapped_agent"},
         )
 
