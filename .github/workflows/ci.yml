@@ -41,6 +41,15 @@ jobs:
         run: uv sync --extra dev
         working-directory: lisa
 
+      # The pack's own runtime dependencies are not part of the framework
+      # distribution, so the pack is installed into the framework
+      # environment as well. Without this the test suite can import a
+      # dependency that happens to be present locally but is not declared
+      # anywhere the CI environment resolves from.
+      - name: Install the pack
+        run: uv pip install --python .venv -e ..
+        working-directory: lisa
+
       # ruff and mypy resolve their configuration from the working
       # directory, so they run against the framework checkout: that is
       # where the shared [tool.ruff] and [tool.mypy] settings live. The
@@ -53,8 +62,13 @@ jobs:
         run: uv run ruff check "../lisa_packs/letta"
         working-directory: lisa
 
+      # mypy is run against the pack root so the pack's own namespace
+      # package resolves. The exclude drops the build/ tree that a local
+      # "pip install -e ." leaves behind: it is gitignored, so it is absent
+      # in CI, but when present it duplicates the "lisa_packs" module and
+      # makes mypy stop before it checks anything.
       - name: Type check (mypy)
-        run: uv run mypy "../lisa_packs/letta"
+        run: uv run mypy --exclude '(^|/)build/' "../lisa_packs/letta"
         working-directory: lisa
 
       # pytest runs from the pack root: the pack's own pyproject.toml sets
