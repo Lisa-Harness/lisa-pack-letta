@@ -41,6 +41,15 @@ jobs:
         run: uv sync --extra dev
         working-directory: lisa
 
+      # The pack's own runtime dependencies are not part of the framework
+      # distribution, so the pack is installed into the framework
+      # environment as well. Without this the test suite can import a
+      # dependency that happens to be present locally but is not declared
+      # anywhere the CI environment resolves from.
+      - name: Install the pack
+        run: uv pip install --python .venv -e .
+        working-directory: lisa
+
       # ruff and mypy resolve their configuration from the working
       # directory, so they run against the framework checkout: that is
       # where the shared [tool.ruff] and [tool.mypy] settings live. The
